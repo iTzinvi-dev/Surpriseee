@@ -3,22 +3,78 @@ class SoundEngine {
   private isMuted: boolean = false;
   private bgLoopTimeout: number | null = null;
   private isPlayingBgm: boolean = false;
+  private isTabActive: boolean = true;
+  private listenersAttached: boolean = false;
+
+  constructor() {
+    this.attachLifecycleListeners();
+  }
+
+  private attachLifecycleListeners() {
+    if (typeof window === 'undefined' || this.listenersAttached) return;
+    this.listenersAttached = true;
+
+    // Handle tab switching (switching to another tab pauses audio)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.isTabActive = false;
+        if (this.ctx && this.ctx.state === 'running') {
+          this.ctx.suspend().catch(() => {});
+        }
+      } else {
+        this.isTabActive = true;
+        if (this.ctx && this.ctx.state === 'suspended' && this.isPlayingBgm && !this.isMuted) {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+    });
+
+    // Window blur / focus fallback
+    window.addEventListener('blur', () => {
+      this.isTabActive = false;
+      if (this.ctx && this.ctx.state === 'running') {
+        this.ctx.suspend().catch(() => {});
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      this.isTabActive = true;
+      if (this.ctx && this.ctx.state === 'suspended' && this.isPlayingBgm && !this.isMuted) {
+        this.ctx.resume().catch(() => {});
+      }
+    });
+
+    // Handle tab / browser close or refresh
+    window.addEventListener('beforeunload', () => {
+      this.stopBirthdayBgm();
+      if (this.ctx) {
+        this.ctx.close().catch(() => {});
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      this.stopBirthdayBgm();
+      if (this.ctx) {
+        this.ctx.close().catch(() => {});
+      }
+    });
+  }
 
   private initCtx() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
     }
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx.state === 'suspended' && this.isTabActive) {
+      this.ctx.resume().catch(() => {});
     }
   }
 
   public playClick() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.isTabActive) return;
     try {
       this.initCtx();
-      if (!this.ctx) return;
+      if (!this.ctx || this.ctx.state !== 'running') return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
@@ -40,10 +96,10 @@ class SoundEngine {
   }
 
   public playWrong() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.isTabActive) return;
     try {
       this.initCtx();
-      if (!this.ctx) return;
+      if (!this.ctx || this.ctx.state !== 'running') return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
@@ -65,10 +121,10 @@ class SoundEngine {
   }
 
   public playUnlock() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.isTabActive) return;
     try {
       this.initCtx();
-      if (!this.ctx) return;
+      if (!this.ctx || this.ctx.state !== 'running') return;
       
       const freqs = [523.25, 659.25, 783.99, 1046.50];
       freqs.forEach((freq, idx) => {
@@ -111,10 +167,10 @@ class SoundEngine {
     const playNextNote = () => {
       if (!this.isPlayingBgm) return;
 
-      if (!this.isMuted) {
+      if (!this.isMuted && this.isTabActive) {
         try {
           this.initCtx();
-          if (this.ctx) {
+          if (this.ctx && this.ctx.state === 'running') {
             const [freq, dur] = melody[noteIndex];
             const osc = this.ctx.createOscillator();
             const sub = this.ctx.createOscillator();
@@ -126,7 +182,7 @@ class SoundEngine {
             sub.frequency.setValueAtTime(freq / 2, this.ctx.currentTime);
 
             gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.08, this.ctx.currentTime + 0.04);
+            gain.gain.linearRampToValueAtTime(0.07, this.ctx.currentTime + 0.04);
             gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + dur * 1.4);
 
             osc.connect(gain);
@@ -162,6 +218,11 @@ class SoundEngine {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    if (this.isMuted && this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    } else if (!this.isMuted && this.ctx && this.ctx.state === 'suspended' && this.isTabActive) {
+      this.ctx.resume().catch(() => {});
+    }
     return this.isMuted;
   }
 

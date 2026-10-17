@@ -99,6 +99,7 @@ export default function BirthdayReveal({ onRestart }: BirthdayRevealProps) {
     });
 
     return () => {
+      soundEngine.stopBirthdayBgm();
       clearTimeout(secondBurst);
       ctx.revert();
     };
