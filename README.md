@@ -2,11 +2,6 @@
 
 | A special project dedicated exclusively to my brother, Nahid. ❤️ |
 | :--- |
-
-## 🚀 Live Demo
-আপনার প্রজেক্টটি সরাসরি অনলাইনে দেখার জন্য নিচে ক্লিক করুন:
-👉 [**secretsurpri.vercel.app**](https://vercel.app)
-
 ---
 
 ## 🌟 Overview
